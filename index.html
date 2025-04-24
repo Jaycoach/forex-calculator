@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Trading Forex</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        .container {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"], textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .results {
+            background-color: #edf7ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .scenario {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-left: 3px solid #3498db;
+            background-color: #f5f9ff;
+        }
+        .highlight {
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        .best-option {
+            border: 2px solid #27ae60;
+            background-color: #eafaf1;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h1>Calculadora de Trading Forex</h1>
+    
+    <div class="container">
+        <div class="form-group">
+            <label for="accountSize">Tamaño de la cuenta ($):</label>
+            <input type="number" id="accountSize" min="1" step="1" value="1000">
+        </div>
+        
+        <div class="form-group">
+            <label for="tradeSignal">Señal de Trading (ejemplo: GBPNZD BUY 2.2220):</label>
+            <input type="text" id="tradeSignal" placeholder="PAR DIRECCIÓN PRECIO">
+        </div>
+        
+        <div class="form-group">
+            <label for="levels">Niveles de TP y SL (ejemplo: TP 2.2250 TP 2.2270 TP 2.2320 SL 2.2125):</label>
+            <input type="text" id="levels" placeholder="TP PRECIO1 TP PRECIO2 TP PRECIO3 SL PRECIO">
+        </div>
+        
+        <button onclick="calculateTrade()">Calcular</button>
+    </div>
+    
+    <div id="results" class="results" style="display: none;">
+        <h2>Resultados del Cálculo</h2>
+        <div id="tradeDetails"></div>
+        <div id="lotSizeResults"></div>
+        <div id="scenariosResults"></div>
+        <div id="bestScenario"></div>
+    </div>
+    
+    <script>
+        function calculateTrade() {
+            // Obtener datos de entrada
+            const accountSize = parseFloat(document.getElementById('accountSize').value);
+            const signalInput = document.getElementById('tradeSignal').value.trim();
+            const levelsInput = document.getElementById('levels').value.trim();
+            
+            // Validar entradas
+            if (!accountSize || isNaN(accountSize) || accountSize <= 0) {
+                alert("Por favor, introduce un tamaño de cuenta válido.");
+                return;
+            }
+            
+            if (!signalInput) {
+                alert("Por favor, introduce la señal de trading.");
+                return;
+            }
+            
+            if (!levelsInput) {
+                alert("Por favor, introduce los niveles de TP y SL.");
+                return;
+            }
+            
+            // Procesar señal de trading
+            const signalParts = signalInput.split(' ');
+            if (signalParts.length < 3) {
+                alert("Formato de señal incorrecto. Usar: PAR DIRECCIÓN PRECIO");
+                return;
+            }
+            
+            const pair = signalParts[0];
+            const direction = signalParts[1].toUpperCase();
+            const entryPrice = parseFloat(signalParts[2]);
+            
+            if (isNaN(entryPrice)) {
+                alert("Precio de entrada inválido.");
+                return;
+            }
+            
+            // Procesar niveles
+            const levelsParts = levelsInput.split(' ');
+            let tp1, tp2, tp3, sl;
+            
+            for (let i = 0; i < levelsParts.length; i++) {
+                if (levelsParts[i] === 'TP') {
+                    if (!tp1) {
+                        tp1 = parseFloat(levelsParts[i + 1]);
+                    } else if (!tp2) {
+                        tp2 = parseFloat(levelsParts[i + 1]);
+                    } else if (!tp3) {
+                        tp3 = parseFloat(levelsParts[i + 1]);
+                    }
+                } else if (levelsParts[i] === 'SL') {
+                    sl = parseFloat(levelsParts[i + 1]);
+                }
+            }
+            
+            if (isNaN(tp1) || isNaN(tp2) || isNaN(tp3) || isNaN(sl)) {
+                alert("Niveles de TP o SL inválidos.");
+                return;
+            }
+            
+            // Calcular pips para cada nivel
+            const isJPYPair = pair.includes('JPY');
+            let pipMultiplier = isJPYPair ? 0.01 : 0.0001;
+            
+            // Calcular pips dependiendo de la dirección
+            let tp1Pips, tp2Pips, tp3Pips, slPips;
+            
+            if (direction === 'BUY') {
+                tp1Pips = Math.abs((tp1 - entryPrice) / pipMultiplier);
+                tp2Pips = Math.abs((tp2 - entryPrice) / pipMultiplier);
+                tp3Pips = Math.abs((tp3 - entryPrice) / pipMultiplier);
+                slPips = Math.abs((entryPrice - sl) / pipMultiplier);
+            } else if (direction === 'SELL') {
+                tp1Pips = Math.abs((entryPrice - tp1) / pipMultiplier);
+                tp2Pips = Math.abs((entryPrice - tp2) / pipMultiplier);
+                tp3Pips = Math.abs((entryPrice - tp3) / pipMultiplier);
+                slPips = Math.abs((sl - entryPrice) / pipMultiplier);
+            } else {
+                alert("Dirección inválida. Debe ser BUY o SELL.");
+                return;
+            }
+            
+            // Calcular tamaño máximo de lote basado en riesgo del 2%
+            const maxRiskAmount = accountSize * 0.02; // 2% del capital
+            let lotValue = 10; // valor de un pip por lote de 1.0 (aproximadamente $10 por pip para la mayoría de pares)
+            
+            // Calcular tamaño de lote máximo basado en riesgo
+            let maxLotSize = maxRiskAmount / (slPips * lotValue);
+            // Redondear a múltiplos de 0.01 y asegurar mínimo de 0.01
+            maxLotSize = Math.floor(maxLotSize * 100) / 100;
+            if (maxLotSize < 0.01) maxLotSize = 0.01;
+            
+            // Evitar que maxLotSize sea 0 debido a errores de cálculo
+            if (isNaN(maxLotSize) || maxLotSize <= 0) maxLotSize = 0.01;
+            
+            // Calcular distribución de lotes según la recomendación (70/15/15)
+            let tp1LotSize = Math.floor((maxLotSize * 0.7) * 100) / 100;
+            if (tp1LotSize < 0.01) tp1LotSize = 0.01;
+            
+            let tp2LotSize = Math.floor((maxLotSize * 0.15) * 100) / 100;
+            if (tp2LotSize < 0.01) tp2LotSize = 0.01;
+            
+            let tp3LotSize = Math.floor((maxLotSize * 0.15) * 100) / 100;
+            if (tp3LotSize < 0.01) tp3LotSize = 0.01;
+            
+            // Calcular potencial de ganancias y pérdidas para cada escenario
+            const scenarios = [
+                {
+                    name: "Escenario 1: SL en punto de entrada para ambos TP2 y TP3",
+                    tp2SL: entryPrice,
+                    tp3SL: entryPrice,
+                    profit: 0,
+                    risk: 0
+                },
+                {
+                    name: "Escenario 2: SL en punto de entrada para TP2, mitad del SL original para TP3",
+                    tp2SL: entryPrice,
+                    tp3SL: direction === 'BUY' ? entryPrice - (entryPrice - sl) / 2 : entryPrice + (sl - entryPrice) / 2,
+                    profit: 0,
+                    risk: 0
+                },
+                {
+                    name: "Escenario 3: Mitad del SL original para ambos TP2 y TP3",
+                    tp2SL: direction === 'BUY' ? entryPrice - (entryPrice - sl) / 2 : entryPrice + (sl - entryPrice) / 2,
+                    tp3SL: direction === 'BUY' ? entryPrice - (entryPrice - sl) / 2 : entryPrice + (sl - entryPrice) / 2,
+                    profit: 0,
+                    risk: 0
+                },
+                {
+                    name: "Escenario 4: Mitad del SL original para TP2, SL original para TP3",
+                    tp2SL: direction === 'BUY' ? entryPrice - (entryPrice - sl) / 2 : entryPrice + (sl - entryPrice) / 2,
+                    tp3SL: sl,
+                    profit: 0,
+                    risk: 0
+                },
+                {
+                    name: "Escenario 5: SL original para ambos TP2 y TP3",
+                    tp2SL: sl,
+                    tp3SL: sl,
+                    profit: 0,
+                    risk: 0
+                }
+            ];
+            
+            // Calcular profit/risk para cada escenario
+            for (let i = 0; i < scenarios.length; i++) {
+                let scenario = scenarios[i];
+                
+                // Calcular pips de SL para TP2 y TP3 en cada escenario
+                let tp2SLPips, tp3SLPips;
+                
+                if (direction === 'BUY') {
+                    tp2SLPips = Math.abs((scenario.tp2SL - entryPrice) / pipMultiplier);
+                    tp3SLPips = Math.abs((scenario.tp3SL - entryPrice) / pipMultiplier);
+                } else {
+                    tp2SLPips = Math.abs((entryPrice - scenario.tp2SL) / pipMultiplier);
+                    tp3SLPips = Math.abs((entryPrice - scenario.tp3SL) / pipMultiplier);
+                }
+                
+                // Si SL está por debajo (BUY) o por encima (SELL) del punto de entrada, es una pérdida potencial
+                if ((direction === 'BUY' && scenario.tp2SL < entryPrice) || 
+                    (direction === 'SELL' && scenario.tp2SL > entryPrice)) {
+                    scenario.risk += tp2LotSize * tp2SLPips * lotValue;
+                } else {
+                    scenario.profit += tp2LotSize * tp2SLPips * lotValue;
+                }
+                
+                if ((direction === 'BUY' && scenario.tp3SL < entryPrice) || 
+                    (direction === 'SELL' && scenario.tp3SL > entryPrice)) {
+                    scenario.risk += tp3LotSize * tp3SLPips * lotValue;
+                } else {
+                    scenario.profit += tp3LotSize * tp3SLPips * lotValue;
+                }
+                
+                // Agregar ganancias potenciales de TP2 y TP3
+                scenario.profit += tp2LotSize * tp2Pips * lotValue;
+                scenario.profit += tp3LotSize * tp3Pips * lotValue;
+            }
+            
+            // Encontrar el mejor escenario (mayor relación ganancia/pérdida)
+            let bestScenarioIndex = 0;
+            let bestRatio = scenarios[0].risk === 0 ? scenarios[0].profit : scenarios[0].profit / scenarios[0].risk;
+            
+            for (let i = 1; i < scenarios.length; i++) {
+                const ratio = scenarios[i].risk === 0 ? scenarios[i].profit : scenarios[i].profit / scenarios[i].risk;
+                if (ratio > bestRatio) {
+                    bestRatio = ratio;
+                    bestScenarioIndex = i;
+                }
+            }
+            
+            // Mostrar resultados
+            document.getElementById('results').style.display = 'block';
+            
+            // Detalles de la operación
+            let tradeDetailsHTML = `
+                <h3>Detalles de la Operación</h3>
+                <p><strong>Par:</strong> ${pair}</p>
+                <p><strong>Dirección:</strong> ${direction}</p>
+                <p><strong>Precio de Entrada:</strong> ${entryPrice}</p>
+                <p><strong>TP1:</strong> ${tp1} (${tp1Pips.toFixed(1)} pips)</p>
+                <p><strong>TP2:</strong> ${tp2} (${tp2Pips.toFixed(1)} pips)</p>
+                <p><strong>TP3:</strong> ${tp3} (${tp3Pips.toFixed(1)} pips)</p>
+                <p><strong>SL:</strong> ${sl} (${slPips.toFixed(1)} pips)</p>
+            `;
+            document.getElementById('tradeDetails').innerHTML = tradeDetailsHTML;
+            
+            // Resultados de tamaño de lote
+            let lotSizeHTML = `
+                <h3>Tamaño de Lote Recomendado</h3>
+                <p>Riesgo máximo (2% de la cuenta): $${maxRiskAmount.toFixed(2)}</p>
+                <p>Tamaño de lote máximo total: ${maxLotSize.toFixed(2)}</p>
+                <p>TP1 (70%): <span class="highlight">${tp1LotSize.toFixed(2)}</span> lotes</p>
+                <p>TP2 (15%): <span class="highlight">${tp2LotSize.toFixed(2)}</span> lotes</p>
+                <p>TP3 (15%): <span class="highlight">${tp3LotSize.toFixed(2)}</span> lotes</p>
+            `;
+            document.getElementById('lotSizeResults').innerHTML = lotSizeHTML;
+            
+            // Resultados de escenarios
+            let scenariosHTML = `
+                <h3>Análisis de Escenarios después de TP1</h3>
+                <table>
+                    <tr>
+                        <th>Escenario</th>
+                        <th>Ganancia Potencial</th>
+                        <th>Riesgo Potencial</th>
+                        <th>Relación Ganancia/Riesgo</th>
+                    </tr>
+            `;
+            
+            for (let i = 0; i < scenarios.length; i++) {
+                const scenario = scenarios[i];
+                const ratio = scenario.risk === 0 ? "∞" : (scenario.profit / scenario.risk).toFixed(2);
+                const rowClass = i === bestScenarioIndex ? "best-option" : "";
+                
+                scenariosHTML += `
+                    <tr class="${rowClass}">
+                        <td>${scenario.name}</td>
+                        <td>$${scenario.profit.toFixed(2)}</td>
+                        <td>$${scenario.risk.toFixed(2)}</td>
+                        <td>${ratio}</td>
+                    </tr>
+                `;
+            }
+            
+            scenariosHTML += `</table>`;
+            document.getElementById('scenariosResults').innerHTML = scenariosHTML;
+            
+            // Mejor escenario
+            const bestScenario = scenarios[bestScenarioIndex];
+            let bestScenarioHTML = `
+                <h3>Mejor Estrategia Recomendada</h3>
+                <div class="scenario best-option">
+                    <p><strong>${bestScenario.name}</strong></p>
+                    <p>Esta estrategia ofrece la mejor relación entre ganancia potencial y riesgo.</p>
+                    <p><strong>Ganancia Potencial:</strong> $${bestScenario.profit.toFixed(2)}</p>
+                    <p><strong>Riesgo Potencial:</strong> $${bestScenario.risk.toFixed(2)}</p>
+                    <p><strong>Relación Ganancia/Riesgo:</strong> ${bestScenario.risk === 0 ? "∞" : (bestScenario.profit / bestScenario.risk).toFixed(2)}</p>
+                </div>
+            `;
+            document.getElementById('bestScenario').innerHTML = bestScenarioHTML;
+        }
+    </script>
+</body>
+</html>
